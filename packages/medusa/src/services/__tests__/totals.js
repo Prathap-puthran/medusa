@@ -59,6 +59,37 @@ const discounts = {
   },
 }
 
+const applyDiscount = (cart, discount) => {
+  if (cart.items) {
+    cart.items = cart.items.map((item) => {
+      const isValid = discount.rule.valid_for.some(
+        ({ id }) => id === item.variant.product_id
+      )
+
+      if (isValid) {
+        return {
+          ...item,
+          adjustments: [
+            {
+              item_id: item.id,
+              amount:
+                discount.rule.type === "fixed"
+                  ? discount.rule.value * item.quantity
+                  : (item.unit_price * item.quantity * discount.rule.value) /
+                    100,
+              description: "discount",
+              resource_id: discount.id,
+            },
+          ],
+        }
+      }
+      return item
+    })
+  }
+
+  return cart
+}
+
 describe("TotalsService", () => {
   const container = {
     taxProviderService: {},
@@ -193,35 +224,38 @@ describe("TotalsService", () => {
 
   describe("getDiscountTotal", () => {
     let res
+    let discountCart
     const totalsService = new TotalsService(container)
 
-    const discountCart = {
-      id: "discount_cart",
-      discounts: [],
-      region_id: "fr",
-      items: [
-        {
-          id: "line",
-          allow_discounts: true,
-          unit_price: 18,
-          variant: {
-            id: "testv1",
-            product_id: "testp1",
+    beforeEach(() => {
+      discountCart = {
+        id: "discount_cart",
+        discounts: [],
+        region_id: "fr",
+        items: [
+          {
+            id: "line",
+            allow_discounts: true,
+            unit_price: 18,
+            variant: {
+              id: "testv1",
+              product_id: "testp1",
+            },
+            quantity: 10,
           },
-          quantity: 10,
-        },
-        {
-          id: "line2",
-          allow_discounts: true,
-          unit_price: 10,
-          variant: {
-            id: "testv2",
-            product_id: "testp2",
+          {
+            id: "line2",
+            allow_discounts: true,
+            unit_price: 10,
+            variant: {
+              id: "testv2",
+              product_id: "testp2",
+            },
+            quantity: 10,
           },
-          quantity: 10,
-        },
-      ],
-    }
+        ],
+      }
+    })
 
     beforeEach(() => {
       jest.clearAllMocks()
@@ -237,6 +271,7 @@ describe("TotalsService", () => {
 
     it("calculate item fixed discount", async () => {
       discountCart.discounts.push(discounts.item2Fixed)
+      discountCart = applyDiscount(discountCart, discounts.item2Fixed)
       res = totalsService.getDiscountTotal(discountCart)
 
       expect(res).toEqual(20)
@@ -244,6 +279,7 @@ describe("TotalsService", () => {
 
     it("calculate item percentage discount", async () => {
       discountCart.discounts.push(discounts.item10Percent)
+      discountCart = applyDiscount(discountCart, discounts.item10Percent)
       res = totalsService.getDiscountTotal(discountCart)
 
       expect(res).toEqual(10)
@@ -282,49 +318,53 @@ describe("TotalsService", () => {
   describe("getRefundTotal", () => {
     let res
     const totalsService = new TotalsService(container)
-    const orderToRefund = {
-      id: "refund-order",
-      tax_rate: 25,
-      items: [
-        {
-          id: "line",
-          unit_price: 100,
-          allow_discounts: true,
-          variant: {
-            id: "variant",
-            product_id: "testp1",
+    let orderToRefund
+
+    beforeEach(() => {
+      orderToRefund = {
+        id: "refund-order",
+        tax_rate: 25,
+        items: [
+          {
+            id: "line",
+            unit_price: 100,
+            allow_discounts: true,
+            variant: {
+              id: "variant",
+              product_id: "testp1",
+            },
+            quantity: 10,
+            returned_quantity: 0,
           },
-          quantity: 10,
-          returned_quantity: 0,
-        },
-        {
-          id: "line2",
-          unit_price: 100,
-          allow_discounts: true,
-          variant: {
-            id: "variant",
-            product_id: "testp2",
+          {
+            id: "line2",
+            unit_price: 100,
+            allow_discounts: true,
+            variant: {
+              id: "variant",
+              product_id: "testp2",
+            },
+            quantity: 10,
+            returned_quantity: 0,
+            metadata: {},
           },
-          quantity: 10,
-          returned_quantity: 0,
-          metadata: {},
-        },
-        {
-          id: "non-discount",
-          unit_price: 100,
-          allow_discounts: false,
-          variant: {
-            id: "variant",
-            product_id: "testp2",
+          {
+            id: "non-discount",
+            unit_price: 100,
+            allow_discounts: false,
+            variant: {
+              id: "variant",
+              product_id: "testp2",
+            },
+            quantity: 1,
+            returned_quantity: 0,
+            metadata: {},
           },
-          quantity: 1,
-          returned_quantity: 0,
-          metadata: {},
-        },
-      ],
-      region_id: "fr",
-      discounts: [],
-    }
+        ],
+        region_id: "fr",
+        discounts: [],
+      }
+    })
 
     beforeEach(() => {
       jest.clearAllMocks()
@@ -391,6 +431,7 @@ describe("TotalsService", () => {
 
     it("calculates refund with item fixed discount", async () => {
       orderToRefund.discounts.push(discounts.item2Fixed)
+      orderToRefund = applyDiscount(orderToRefund, discounts.item2Fixed)
       res = totalsService.getRefundTotal(orderToRefund, [
         {
           id: "line2",
@@ -410,6 +451,7 @@ describe("TotalsService", () => {
 
     it("calculates refund with item percentage discount", async () => {
       orderToRefund.discounts.push(discounts.item10Percent)
+      orderToRefund = applyDiscount(orderToRefund, discounts.item10Percent)
       res = totalsService.getRefundTotal(orderToRefund, [
         {
           id: "line2",

@@ -665,13 +665,18 @@ class TotalsService extends BaseService {
         }
       })
     } else if (allocation === "item") {
-      const allocationDiscounts = this.getAllocationItemDiscounts(
-        discount,
-        cartOrOrder
-      )
+      const allocationDiscounts = cartOrOrder.items.map((item) => ({
+        item,
+        amount:
+          item.adjustments?.reduce(
+            (total, adjustment) => total + adjustment.amount,
+            0
+          ) || 0,
+      }))
+
       return merged.map((item) => {
         const discounted = allocationDiscounts.find(
-          (a) => a.lineItem.id === item.id
+          (a) => a.item.id === item.id
         )
         return {
           item,
@@ -860,14 +865,14 @@ class TotalsService extends BaseService {
     return Math.min(giftCardable, toReturn)
   }
 
-  getNewDiscountTotal(cartOrOrder: Cart | Order): number {
+  getLineItemAdjustmentsTotal(cartOrOrder: Cart | Order): number {
     return cartOrOrder.items.reduce(
       (total, item) =>
         total +
-        item.adjustments.reduce(
-          (total, adjustment) => total + adjustment.amount,
-          0
-        ),
+          item.adjustments?.reduce(
+            (total, adjustment) => total + adjustment.amount,
+            0
+          ) || 0,
       0
     )
   }
@@ -902,20 +907,10 @@ class TotalsService extends BaseService {
 
     if (type === "percentage" && allocation === "total") {
       toReturn = (subtotal / 100) * value
-    } else if (type === "percentage" && allocation === "item") {
-      const itemPercentageDiscounts = this.getAllocationItemDiscounts(
-        discount,
-        cartOrOrder
-      )
-      toReturn = _.sumBy(itemPercentageDiscounts, (d) => d.amount)
     } else if (type === "fixed" && allocation === "total") {
       toReturn = value
-    } else if (type === "fixed" && allocation === "item") {
-      const itemFixedDiscounts = this.getAllocationItemDiscounts(
-        discount,
-        cartOrOrder
-      )
-      toReturn = _.sumBy(itemFixedDiscounts, (d) => d.amount)
+    } else if (allocation === "item") {
+      toReturn = this.getLineItemAdjustmentsTotal(cartOrOrder)
     }
 
     if (subtotal < 0) {
