@@ -178,16 +178,24 @@ class LineItemAdjustmentService extends BaseService {
     lineItem: LineItem
   ): Promise<LineItemAdjustment | undefined> {
     return this.atomicPhase_(async (manager) => {
-      const discount = await this.discountService
-        .withTransaction(manager)
-        .validateDiscountsForLineItem(cart.discounts, lineItem)
+      const [discount] = cart.discounts.filter(
+        (d) => d.rule.type !== "free_shipping"
+      )
 
-      if (!discount) {
+      const lineItemProduct = lineItem.variant.product_id
+
+      const isValid = await this.discountService
+        .withTransaction(manager)
+        .validateDiscountForProduct(cart.discounts, lineItemProduct)
+
+      if (!isValid) {
         return
       }
 
       const amount = await this.discountService.calculateDiscountApplied(
-        discount
+        cart,
+        discount.rule,
+        lineItem
       )
 
       const lineItemAdjustment = await this.create({

@@ -10,7 +10,9 @@ import {
   TotalsService,
 } from "."
 import { Discount, DiscountRule } from ".."
+import { Cart } from "../models/cart"
 import { DiscountConditionType } from "../models/discount-condition"
+import { LineItem } from "../models/line-item"
 import { DiscountRepository } from "../repositories/discount"
 import { DiscountConditionRepository } from "../repositories/discount-condition"
 import { DiscountRuleRepository } from "../repositories/discount-rule"
@@ -680,6 +682,38 @@ class DiscountService extends BaseService {
         discountRuleId,
         product
       )
+    })
+  }
+
+  async calculateDiscountApplied(
+    cart: Cart,
+    discountRule: DiscountRule,
+    lineItem: LineItem
+  ): Promise<number> {
+    return this.atomicPhase_(async (manager) => {
+      // const discountRuleRepo: DiscountRuleRepository =
+      //   manager.getCustomRepository(this.discountRuleRepository_)
+
+      // const discountRule = await discountRuleRepo.findOne({
+      //   id: discountRuleId,
+      // })
+
+      if (discountRule.type === "percentage") {
+        return (
+          (lineItem.unit_price * lineItem.quantity * discountRule.value) / 100
+        )
+      } else if (
+        discountRule.type === "fixed" &&
+        discountRule.allocation === "total"
+      ) {
+        const subtotal = cart.items.reduce(
+          (total, item) => total + item.quantity * item.unit_price,
+          0
+        )
+        return discountRule.value / subtotal
+      }
+
+      return discountRule.value
     })
   }
 }
