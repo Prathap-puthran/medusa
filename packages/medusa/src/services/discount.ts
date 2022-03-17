@@ -690,31 +690,19 @@ class DiscountService extends BaseService {
     discountRule: DiscountRule,
     lineItem: LineItem
   ): Promise<number> {
-    return this.atomicPhase_(async (manager) => {
-      // const discountRuleRepo: DiscountRuleRepository =
-      //   manager.getCustomRepository(this.discountRuleRepository_)
+    if (discountRule.type === "percentage") {
+      return Math.round(
+        lineItem.unit_price * lineItem.quantity * (discountRule.value / 100)
+      )
+    } else if (
+      discountRule.type === "fixed" &&
+      discountRule.allocation === "total"
+    ) {
+      const subtotal = this.totalsService_.getSubtotal(cart)
+      return Math.round(discountRule.value / subtotal)
+    }
 
-      // const discountRule = await discountRuleRepo.findOne({
-      //   id: discountRuleId,
-      // })
-
-      if (discountRule.type === "percentage") {
-        return (
-          (lineItem.unit_price * lineItem.quantity * discountRule.value) / 100
-        )
-      } else if (
-        discountRule.type === "fixed" &&
-        discountRule.allocation === "total"
-      ) {
-        const subtotal = cart.items.reduce(
-          (total, item) => total + item.quantity * item.unit_price,
-          0
-        )
-        return discountRule.value / subtotal
-      }
-
-      return discountRule.value
-    })
+    return discountRule.value
   }
 }
 

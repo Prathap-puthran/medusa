@@ -178,6 +178,11 @@ class LineItemAdjustmentService extends BaseService {
     lineItem: LineItem
   ): Promise<LineItemAdjustment | undefined> {
     return this.atomicPhase_(async (manager) => {
+      // if lineItem should not be discounted then do nothing
+      if (!lineItem.allow_discounts) {
+        return
+      }
+
       const [discount] = cart.discounts.filter(
         (d) => d.rule.type !== "free_shipping"
       )
@@ -188,6 +193,7 @@ class LineItemAdjustmentService extends BaseService {
         .withTransaction(manager)
         .validateDiscountForProduct(cart.discounts, lineItemProduct)
 
+      // if discount is not valid for line item, then do nothing
       if (!isValid) {
         return
       }
@@ -197,6 +203,11 @@ class LineItemAdjustmentService extends BaseService {
         discount.rule,
         lineItem
       )
+
+      // if discounted amount is 0, then do nothing
+      if (amount === 0) {
+        return
+      }
 
       const lineItemAdjustment = await this.create({
         item_id: lineItem.id,
