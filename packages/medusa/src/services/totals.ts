@@ -622,10 +622,6 @@ class TotalsService extends BaseService {
     cartOrOrder: Cart | Order,
     discount: Discount
   ): LineDiscountAmount[] {
-    const subtotal = this.getSubtotal(cartOrOrder, {
-      excludeNonDiscounts: true,
-    })
-
     let merged: LineItem[] = [...cartOrOrder.items]
 
     // merge items from order with items from order swaps
@@ -641,48 +637,21 @@ class TotalsService extends BaseService {
       }
     }
 
-    const { type, allocation, value } = discount.rule
-    if (allocation === "total") {
-      let percentage = 0
-      if (type === "percentage") {
-        percentage = value / 100
-      } else if (type === "fixed") {
-        // If the fixed discount exceeds the subtotal we should
-        // calculate a 100% discount
-        const nominator = Math.min(value, subtotal)
-        percentage = nominator / subtotal
-      }
+    return merged.map((item) => {
+      const discountAdjustments = item.adjustments.filter(
+        (adjustment) => adjustment.discount_id === discount.id
+      )
 
-      return merged.map((item) => {
-        const lineTotal = item.unit_price * item.quantity
-
-        return {
-          item,
-          amount: item.allow_discounts ? lineTotal * percentage : 0,
-        }
-      })
-    } else if (allocation === "item") {
-      const allocationDiscounts = cartOrOrder.items.map((item) => ({
+      return {
         item,
-        amount:
-          item.adjustments?.reduce(
-            (total, adjustment) => total + adjustment.amount,
-            0
-          ) || 0,
-      }))
-
-      return merged.map((item) => {
-        const discounted = allocationDiscounts.find(
-          (a) => a.item.id === item.id
-        )
-        return {
-          item,
-          amount: discounted ? discounted.amount : 0,
-        }
-      })
-    }
-
-    return merged.map((i) => ({ item: i, amount: 0 }))
+        amount: item.allow_discounts
+          ? discountAdjustments.reduce(
+              (total, adjustment) => total + adjustment.amount,
+              0
+            )
+          : 0,
+      }
+    })
   }
 
   /**
@@ -899,16 +868,7 @@ class TotalsService extends BaseService {
       return 0
     }
 
-    const { type, allocation, value } = discount.rule
-    let toReturn = 0
-
-    if (type === "percentage" && allocation === "total") {
-      toReturn = (subtotal / 100) * value
-    } else if (type === "fixed" && allocation === "total") {
-      toReturn = value
-    } else if (allocation === "item") {
-      toReturn = this.getLineItemAdjustmentsTotal(cartOrOrder)
-    }
+    const toReturn = this.getLineItemAdjustmentsTotal(cartOrOrder)
 
     if (subtotal < 0) {
       return this.rounded(Math.max(subtotal, toReturn))
