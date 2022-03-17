@@ -12,6 +12,7 @@ import {
 import { Discount, DiscountRule } from ".."
 import { Cart } from "../models/cart"
 import { DiscountConditionType } from "../models/discount-condition"
+import { AllocationType, DiscountRuleType } from "../models/discount-rule"
 import { LineItem } from "../models/line-item"
 import { DiscountRepository } from "../repositories/discount"
 import { DiscountConditionRepository } from "../repositories/discount-condition"
@@ -690,19 +691,21 @@ class DiscountService extends BaseService {
     discountRule: DiscountRule,
     lineItem: LineItem
   ): Promise<number> {
-    if (discountRule.type === "percentage") {
-      return Math.round(
+    const originalItemPrice = lineItem.unit_price * lineItem.quantity
+    let amount = discountRule.value
+    if (discountRule.type === DiscountRuleType.PERCENTAGE) {
+      amount = Math.round(
         lineItem.unit_price * lineItem.quantity * (discountRule.value / 100)
       )
     } else if (
-      discountRule.type === "fixed" &&
-      discountRule.allocation === "total"
+      discountRule.type === DiscountRuleType.FIXED &&
+      discountRule.allocation === AllocationType.TOTAL
     ) {
       const subtotal = this.totalsService_.getSubtotal(cart)
-      return Math.round(discountRule.value / subtotal)
+      amount = Math.round(discountRule.value / subtotal)
     }
 
-    return discountRule.value
+    return amount > originalItemPrice ? originalItemPrice : amount
   }
 }
 
